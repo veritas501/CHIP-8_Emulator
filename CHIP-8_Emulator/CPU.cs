@@ -171,7 +171,12 @@ namespace CHIP_8_Emulator
 		public byte ST;//reg sound timer, 1byte
 		public byte DT;//reg delay timer, 1byte
 
-		public bool[,] Framebuf;//64x32 bit(use bytes for convenient) memory
+		public bool[,] Framebuf;//64x32 bit memory
+		public bool[,] Framebuf_bak;//64x32 bit backup memory
+
+		public bool needDraw = false;
+		public bool drawFinish = false;
+
 		readonly int screenWeight = 64;
 		readonly int screenHeight = 32;
 
@@ -181,8 +186,13 @@ namespace CHIP_8_Emulator
 		Thread thrTimer;
 
 		readonly TimeSpan Tick = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 60);
+		readonly TimeSpan CPUTick = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 1000);
 		readonly Stopwatch stopWatch = Stopwatch.StartNew();
-		TimeSpan lastTime;
+
+
+		//delegate
+		public delegate void DrawHandler(bool[,] frameBuf, bool[,] frameBuf_bak, int x, int y);
+		public event DrawHandler DrawPic;
 
 		~CPU()
 		{
@@ -197,31 +207,35 @@ namespace CHIP_8_Emulator
 			Mem = new byte[0x1000];
 			Regs = new byte[0x10];
 			Framebuf = new bool[screenWeight, screenHeight];
+			Framebuf_bak = new bool[screenWeight, screenHeight];
 			keyboard = new byte[0x10];
 
 			PC = 0x200;
 			SP = 0;
-			I = 0;
+			I = 0x200;
 			ST = 0;
 			DT = 0;
 
 			rd = new Random();
 			thrTimer = new Thread(new ThreadStart(TickTimer));
+			thrTimer.IsBackground = true;
 			thrTimer.Start();
 		}
 
-		public void TickTimer()
+		public void TickTimer()//60Hz时钟
 		{
+			TimeSpan lastTime = stopWatch.Elapsed;
+
 			while (true)
 			{
 				var currentTime = stopWatch.Elapsed;
 				var counter = currentTime - lastTime;
 
-				if (counter >= Tick)
+				if (counter >= Tick)//触发时钟时间
 				{
 					lastTime = currentTime;
 
-					if(ST != 0)
+					if (ST != 0)
 					{
 						ST -= 1;
 #if DEBUG
@@ -229,13 +243,28 @@ namespace CHIP_8_Emulator
 #endif
 					}
 
-					if(DT != 0)
+					if (DT != 0)
 					{
 						DT -= 1;
 #if DEBUG
 						Console.WriteLine("DT--");
 #endif
 					}
+
+					if (needDraw)
+					{
+						while (!drawFinish)
+						{
+
+						}
+						DrawPic(Framebuf_bak, Framebuf, screenWeight, screenHeight);
+						Array.Copy(Framebuf_bak, Framebuf, screenWeight * screenHeight);
+
+						needDraw = false;
+						drawFinish = false;
+					}
+
+
 				}
 			}
 		}
@@ -264,14 +293,16 @@ namespace CHIP_8_Emulator
 			while (true)
 			{
 				Disasm();
-				System.Threading.Thread.Sleep(1);
+				Thread.Sleep(CPUTick);
 			}
 		}
 
 		public void Disasm()
 		{
 			short code = (short)((Mem[PC] << 8) + Mem[PC + 1]);
-			Console.Write("code: 0x" + string.Format("{0:X} => ", code));
+#if DEBUG
+			Console.Write(string.Format("PC:0x{0:X} => ", PC));
+#endif
 			PC += 2;
 
 			short nnn = (short)(code & 0xfff);
@@ -657,8 +688,6 @@ namespace CHIP_8_Emulator
 
 			}
 
-
-
 		}
 		//==================================================================
 
@@ -777,7 +806,7 @@ namespace CHIP_8_Emulator
 
 		public void DisasmSHLVX(byte X)//8XYE
 		{
-			Regs[0xf] = (byte)((Regs[X] >> 7 & 1) != 0 ? 1 : 0);
+			Regs[0xf] = (byte)(Regs[X] >> 7);
 			Regs[X] <<= 1;
 		}
 
@@ -812,11 +841,40 @@ namespace CHIP_8_Emulator
 		/// <param name="nibble"></param>
 		public void DisasmDRW(byte X, byte Y, byte nibble)//DXYN
 		{
-			//TODO
 			//Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels. Each row of 8 pixels is read as bit-coded starting from memory location I; I value doesn’t change after the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped from set to unset when the sprite is drawn, and to 0 if that doesn’t happen
 
+			//为减少全局刷新造成的全屏闪烁,采用两块framebuf,比较差异来做局部刷新.
 
+			//将此次变化写到Framebuf_bak
+			while (drawFinish)
+			{
 
+			}
+			needDraw = true;
+
+			Regs[0xf] = 0;
+			byte startX = Regs[X];
+			byte startY = Regs[Y];
+			int pixel = 0;
+
+			for (int i = 0; i < nibble; i++)
+			{
+				byte pixelLine = Mem[I + i];
+				for (int j = 0; j < 8; j++)
+				{
+					if ((startX + j) < screenWeight && (startY + i) < screenHeight)//越界
+					{
+						pixel = Framebuf_bak[startX + j, startY + i] ? 1 : 0;
+						Framebuf_bak[startX + j, startY + i] = (pixel ^ ((pixelLine >> (7 - j)) & 1)) == 1 ? true : false;
+						if (!Framebuf_bak[startX + j, startY + i] && Framebuf[startX + j, startY + i])//之前为1,之后为0,设置VF=1
+						{
+							Regs[0xf] = 1;
+						}
+					}
+				}
+			}
+
+			drawFinish = true;
 		}
 
 		public void DisasmSKP(byte X)//EX9E
@@ -883,17 +941,17 @@ namespace CHIP_8_Emulator
 
 		public void DisasmLDIVX(byte X)//FX55
 		{
-			for (byte i = 0; i <= X; I++)
+			for (byte i = 0; i <= X; i++)
 			{
-				Mem[I] = Regs[X];
+				Mem[I + i] = Regs[i];
 			}
 		}
 
 		public void DisasmLDVXI(byte X)//FX65
 		{
-			for (byte i = 0; i <= X; I++)
+			for (byte i = 0; i <= X; i++)
 			{
-				Regs[X] = Mem[I];
+				Regs[i] = Mem[I + i];
 			}
 		}
 	}
