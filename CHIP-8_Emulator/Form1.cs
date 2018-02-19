@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace CHIP_8_Emulator
@@ -84,12 +81,9 @@ namespace CHIP_8_Emulator
 			sbFalse = new SolidBrush(colorFalse);
 			sbTrue = new SolidBrush(colorTrue);
 
+			//初始化空framebuf_screen
 			Framebuf_screen = new bool[CPU.screenWeight, CPU.screenHeight];
 			Array.Clear(Framebuf_screen, 0, Framebuf_screen.Length);
-
-			//RunGame("MAZE");
-			//RunGame("PONG");
-			//RunGame("TETRIS");
 		}
 
 		void RunGame(string romPath)
@@ -257,6 +251,16 @@ namespace CHIP_8_Emulator
 				Array.Clear(Framebuf_screen, 0, Framebuf_screen.Length);
 				RunGame(wholePath);
 			}
+		}
+
+		private void keyboardToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			MessageBox.Show("内部按键:\n1 2 3 C\n4 5 6 D\n7 8 9 E\nA 0 B C\n-> 映射到键盘:\n1 2 3 4\nQ W E R\nA S D F\nZ X C V");
+		}
+
+		private void aboutMeToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			MessageBox.Show("Wrttien by veritas501.\n垃圾优化,只实现了基础功能.");
 		}
 	}
 }

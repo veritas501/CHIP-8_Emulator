@@ -32,6 +32,9 @@
 			this.menuStrip1 = new System.Windows.Forms.MenuStrip();
 			this.asdToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			this.openRomToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.keyboardToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+			this.aboutMeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
 			((System.ComponentModel.ISupportInitialize)(this.screen)).BeginInit();
 			this.menuStrip1.SuspendLayout();
 			this.SuspendLayout();
@@ -48,7 +51,8 @@
 			// menuStrip1
 			// 
 			this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.asdToolStripMenuItem});
+            this.asdToolStripMenuItem,
+            this.aboutToolStripMenuItem});
 			this.menuStrip1.Location = new System.Drawing.Point(0, 0);
 			this.menuStrip1.Name = "menuStrip1";
 			this.menuStrip1.Size = new System.Drawing.Size(538, 25);
@@ -69,6 +73,29 @@
 			this.openRomToolStripMenuItem.Size = new System.Drawing.Size(139, 22);
 			this.openRomToolStripMenuItem.Text = "Open Rom";
 			this.openRomToolStripMenuItem.Click += new System.EventHandler(this.openRomToolStripMenuItem_Click);
+			// 
+			// aboutToolStripMenuItem
+			// 
+			this.aboutToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.keyboardToolStripMenuItem,
+            this.aboutMeToolStripMenuItem});
+			this.aboutToolStripMenuItem.Name = "aboutToolStripMenuItem";
+			this.aboutToolStripMenuItem.Size = new System.Drawing.Size(55, 21);
+			this.aboutToolStripMenuItem.Text = "About";
+			// 
+			// keyboardToolStripMenuItem
+			// 
+			this.keyboardToolStripMenuItem.Name = "keyboardToolStripMenuItem";
+			this.keyboardToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+			this.keyboardToolStripMenuItem.Text = "Keyboard";
+			this.keyboardToolStripMenuItem.Click += new System.EventHandler(this.keyboardToolStripMenuItem_Click);
+			// 
+			// aboutMeToolStripMenuItem
+			// 
+			this.aboutMeToolStripMenuItem.Name = "aboutMeToolStripMenuItem";
+			this.aboutMeToolStripMenuItem.Size = new System.Drawing.Size(152, 22);
+			this.aboutMeToolStripMenuItem.Text = "AboutMe";
+			this.aboutMeToolStripMenuItem.Click += new System.EventHandler(this.aboutMeToolStripMenuItem_Click);
 			// 
 			// Form1
 			// 
@@ -99,6 +126,9 @@
 		private System.Windows.Forms.MenuStrip menuStrip1;
 		private System.Windows.Forms.ToolStripMenuItem asdToolStripMenuItem;
 		private System.Windows.Forms.ToolStripMenuItem openRomToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem aboutToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem keyboardToolStripMenuItem;
+		private System.Windows.Forms.ToolStripMenuItem aboutMeToolStripMenuItem;
 	}
 }
 
