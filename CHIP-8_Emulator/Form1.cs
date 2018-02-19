@@ -2,7 +2,9 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -14,8 +16,11 @@ namespace CHIP_8_Emulator
 	public partial class Form1 : Form
 	{
 		CPU cpu;
-		Thread thr;
 		Graphics gp;
+
+		readonly TimeSpan Tick60Hz = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 60);
+		readonly TimeSpan CPUTick = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 1000);
+		readonly Stopwatch stopWatch = Stopwatch.StartNew();
 
 		/*
 		keyboard input:
@@ -63,6 +68,10 @@ namespace CHIP_8_Emulator
 		//是否初始画板(第一次画图)
 		bool firstDraw = true;
 
+		public bool[,] Framebuf_screen;
+
+		Thread thrGameloop;
+
 		public Form1()
 		{
 			InitializeComponent();
@@ -70,26 +79,59 @@ namespace CHIP_8_Emulator
 
 		private void Form1_Load(object sender, EventArgs e)
 		{
-			gp = Graphics.FromHwnd(pictureBox1.Handle);
+			//初始化画图
+			gp = Graphics.FromHwnd(screen.Handle);
 			sbFalse = new SolidBrush(colorFalse);
 			sbTrue = new SolidBrush(colorTrue);
 
-			thr = new Thread(new ThreadStart(RunGame));
-			thr.IsBackground = true;
-			thr.Start();
+			Framebuf_screen = new bool[CPU.screenWeight, CPU.screenHeight];
+			Array.Clear(Framebuf_screen, 0, Framebuf_screen.Length);
+
+			//RunGame("MAZE");
+			//RunGame("PONG");
+			//RunGame("TETRIS");
 		}
 
-		public void RunGame()
+		void RunGame(string romPath)
 		{
+			//初始化cpu
 			cpu = new CPU();
+			//初始化delegate
 			cpu.DrawPic += new CPU.DrawHandler(DrawPic);
+			cpu.MakeSound += new CPU.SoundHandler(MakeSound);
 
-			//cpu.LoadRomToMem("MAZE");
-			//cpu.LoadRomToMem("PONG");
-			cpu.LoadRomToMem("TETRIS");
+			//cpu加载ROM
+			if (cpu.LoadRomToMem(romPath))
+			{
+				//加载成功
+				thrGameloop = new Thread(GameLoop) { IsBackground = true };
+				thrGameloop.Start();
+			}
+		}
 
+		//主要的循环,模拟时钟,cpu执行指令,60hz的屏幕刷新以及ST和DT寄存器
+		void GameLoop()
+		{
+			TimeSpan lastTime = stopWatch.Elapsed;
+			TimeSpan currentTime;
+			TimeSpan elapsedTime;
 
-			cpu.Run();
+			while (true)
+			{
+				currentTime = stopWatch.Elapsed;
+				elapsedTime = currentTime - lastTime;
+
+				while (elapsedTime >= Tick60Hz)
+				{
+					Invoke((Action)(() => { cpu.Tick(); }));
+
+					elapsedTime -= Tick60Hz;
+					lastTime += Tick60Hz;
+				}
+				Invoke((Action)(() => { cpu.Disasm(); }));
+
+				Thread.Sleep(CPUTick);
+			}
 		}
 
 		private void Form1_KeyDown(object sender, KeyEventArgs e)
@@ -120,19 +162,25 @@ namespace CHIP_8_Emulator
 
 		private void Form1_FormClosing(object sender, FormClosingEventArgs e)
 		{
-
-			thr.Abort();
+			//终止线程
+			try
+			{
+				thrGameloop.Abort();
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine(ex);
+			}
 		}
 
-		//delegate update pic
-		public void DrawPic(bool[,] frameBuf, bool[,] frameBuf_bak, int x, int y)
+		//delegate 画图
+		public void DrawPic(bool[,] frameBuf, int x, int y)
 		{
-
-
-			if (pictureBox1.InvokeRequired)
+			
+			if (screen.InvokeRequired)
 			{
 				CPU.DrawHandler sch = new CPU.DrawHandler(DrawPic);
-				this.Invoke(sch, new object[] { frameBuf, frameBuf_bak, x, y });
+				this.Invoke(sch, new object[] { frameBuf, x, y });
 			}
 			else
 			{
@@ -143,13 +191,13 @@ namespace CHIP_8_Emulator
 				}
 
 				//update picturebox1 image
-				int pixelSize = pictureBox1.Size.Width / 64;
+				int pixelSize = screen.Size.Width / 64;
 
 				for (int i = 0; i < x; i++)
 				{
 					for (int j = 0; j < y; j++)
 					{
-						if (frameBuf[i, j] != frameBuf_bak[i, j])
+						if (frameBuf[i, j] != Framebuf_screen[i, j])
 						{
 							lock (gp)
 							{
@@ -175,6 +223,39 @@ namespace CHIP_8_Emulator
 						}
 					}
 				}
+
+				Array.Copy(frameBuf, Framebuf_screen, CPU.screenWeight * CPU.screenHeight);
+			}
+		}
+
+		//delegate 发声
+		public void MakeSound(int ms)
+		{
+			Console.Beep(1000, ms);
+		}
+
+		//打开游戏ROM文件
+		private void openRomToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			OpenFileDialog openfd = new OpenFileDialog();
+
+			openfd.Title = "选择游戏ROM:";
+			openfd.Filter = "ROM文件(*.*)|*.*";
+			if (openfd.ShowDialog() == DialogResult.OK)
+			{
+				string wholePath = openfd.FileName;
+
+				try
+				{
+					thrGameloop.Abort();
+				}catch(Exception ex)
+				{
+					Console.WriteLine(ex);
+				}
+				
+				firstDraw = true;
+				Array.Clear(Framebuf_screen, 0, Framebuf_screen.Length);
+				RunGame(wholePath);
 			}
 		}
 	}

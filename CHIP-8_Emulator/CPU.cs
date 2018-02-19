@@ -6,8 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Diagnostics;
 
 namespace CHIP_8_Emulator
 {
@@ -171,33 +169,25 @@ namespace CHIP_8_Emulator
 		public byte ST;//reg sound timer, 1byte
 		public byte DT;//reg delay timer, 1byte
 
-		public bool[,] Framebuf;//64x32 bit memory
-		public bool[,] Framebuf_bak;//64x32 bit backup memory
+		public bool[,] Framebuf_drawing;//64x32 bit memory
+		public bool[,] Framebuf_pending;//64x32 bit memory
 
 		public bool needDraw = false;
 		public bool drawFinish = false;
 
-		readonly int screenWeight = 64;
-		readonly int screenHeight = 32;
+		public static readonly int screenWeight = 64;
+		public static readonly int screenHeight = 32;
 
 
 		public byte[] keyboard;//16个按键
 
-		Thread thrTimer;
-
-		readonly TimeSpan Tick = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 60);
-		readonly TimeSpan CPUTick = TimeSpan.FromTicks(TimeSpan.TicksPerSecond / 1000);
-		readonly Stopwatch stopWatch = Stopwatch.StartNew();
 
 
 		//delegate
-		public delegate void DrawHandler(bool[,] frameBuf, bool[,] frameBuf_bak, int x, int y);
+		public delegate void DrawHandler(bool[,] frameBuf, int x, int y);
 		public event DrawHandler DrawPic;
-
-		~CPU()
-		{
-			thrTimer.Abort();
-		}
+		public delegate void SoundHandler(int ms);
+		public event SoundHandler MakeSound;
 
 		public CPU()
 		{
@@ -206,8 +196,8 @@ namespace CHIP_8_Emulator
 			Stack = new short[32];
 			Mem = new byte[0x1000];
 			Regs = new byte[0x10];
-			Framebuf = new bool[screenWeight, screenHeight];
-			Framebuf_bak = new bool[screenWeight, screenHeight];
+			Framebuf_drawing = new bool[screenWeight, screenHeight];
+			Framebuf_pending = new bool[screenWeight, screenHeight];
 			keyboard = new byte[0x10];
 
 			PC = 0x200;
@@ -217,59 +207,35 @@ namespace CHIP_8_Emulator
 			DT = 0;
 
 			rd = new Random();
-			thrTimer = new Thread(new ThreadStart(TickTimer));
-			thrTimer.IsBackground = true;
-			thrTimer.Start();
 		}
 
-		public void TickTimer()//60Hz时钟
+		public void Tick()
 		{
-			TimeSpan lastTime = stopWatch.Elapsed;
-
-			while (true)
+			if (ST != 0)
 			{
-				var currentTime = stopWatch.Elapsed;
-				var counter = currentTime - lastTime;
-
-				if (counter >= Tick)//触发时钟时间
-				{
-					lastTime = currentTime;
-
-					if (ST != 0)
-					{
-						ST -= 1;
+				MakeSound((int)(ST * (1000f / 60)));
+				ST = 0;
 #if DEBUG
 						Console.WriteLine("ST--");
 #endif
-					}
+			}
 
-					if (DT != 0)
-					{
-						DT -= 1;
+			if (DT != 0)
+			{
+				DT -= 1;
 #if DEBUG
 						Console.WriteLine("DT--");
 #endif
-					}
+			}
 
-					if (needDraw)
-					{
-						while (!drawFinish)
-						{
-
-						}
-						DrawPic(Framebuf_bak, Framebuf, screenWeight, screenHeight);
-						Array.Copy(Framebuf_bak, Framebuf, screenWeight * screenHeight);
-
-						needDraw = false;
-						drawFinish = false;
-					}
-
-
-				}
+			if (needDraw)
+			{
+				DrawPic(Framebuf_pending, screenWeight, screenHeight);
+				needDraw = false;
 			}
 		}
 
-		public int LoadRomToMem(string filepath)
+		public bool LoadRomToMem(string filepath)
 		{
 			FileStream fs;
 			try
@@ -282,19 +248,10 @@ namespace CHIP_8_Emulator
 			{
 				MessageBox.Show(ex.ToString());
 				Console.WriteLine(ex);
-				return 0;
+				return false;
 			}
 
-			return 1;
-		}
-
-		public void Run()
-		{
-			while (true)
-			{
-				Disasm();
-				Thread.Sleep(CPUTick);
-			}
+			return true;
 		}
 
 		public void Disasm()
@@ -693,7 +650,8 @@ namespace CHIP_8_Emulator
 
 		public void DisasmCLS()//00E0
 		{
-			Array.Clear(Framebuf, 0, Framebuf.Length);
+			Array.Clear(Framebuf_drawing, 0, Framebuf_drawing.Length);
+			Array.Clear(Framebuf_pending, 0, Framebuf_drawing.Length);
 		}
 
 		public void DisasmRET()//00EE
@@ -843,13 +801,7 @@ namespace CHIP_8_Emulator
 		{
 			//Draws a sprite at coordinate (VX, VY) that has a width of 8 pixels and a height of N pixels. Each row of 8 pixels is read as bit-coded starting from memory location I; I value doesn’t change after the execution of this instruction. As described above, VF is set to 1 if any screen pixels are flipped from set to unset when the sprite is drawn, and to 0 if that doesn’t happen
 
-			//为减少全局刷新造成的全屏闪烁,采用两块framebuf,比较差异来做局部刷新.
-
-			//将此次变化写到Framebuf_bak
-			while (drawFinish)
-			{
-
-			}
+			//执行到这条指令时设置needDraw,否则会不刷新.
 			needDraw = true;
 
 			Regs[0xf] = 0;
@@ -864,9 +816,9 @@ namespace CHIP_8_Emulator
 				{
 					if ((startX + j) < screenWeight && (startY + i) < screenHeight)//越界
 					{
-						pixel = Framebuf_bak[startX + j, startY + i] ? 1 : 0;
-						Framebuf_bak[startX + j, startY + i] = (pixel ^ ((pixelLine >> (7 - j)) & 1)) == 1 ? true : false;
-						if (!Framebuf_bak[startX + j, startY + i] && Framebuf[startX + j, startY + i])//之前为1,之后为0,设置VF=1
+						pixel = Framebuf_drawing[startX + j, startY + i] ? 1 : 0;
+						Framebuf_drawing[startX + j, startY + i] = (pixel ^ ((pixelLine >> (7 - j)) & 1)) == 1 ? true : false;
+						if (!Framebuf_drawing[startX + j, startY + i] && Framebuf_pending[startX + j, startY + i])//之前为1,之后为0,设置VF=1
 						{
 							Regs[0xf] = 1;
 						}
@@ -874,7 +826,8 @@ namespace CHIP_8_Emulator
 				}
 			}
 
-			drawFinish = true;
+			//drawing完的显示图形放到pending
+			Array.Copy(Framebuf_drawing, Framebuf_pending, screenWeight * screenHeight);
 		}
 
 		public void DisasmSKP(byte X)//EX9E
