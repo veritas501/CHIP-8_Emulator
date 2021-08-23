@@ -5,13 +5,13 @@
 一些图片:
 
 MAZE:
-![](https://github.com/veritas501/CHIP-8_Emulator/blob/master/pics/MAZE.png?raw=true)
+![](pics/MAZE.png)
 
 PONG:
-![](https://github.com/veritas501/CHIP-8_Emulator/blob/master/pics/PONG.png?raw=true)
+![](pics/PONG.png)
 
 TETRIS:
-![](https://github.com/veritas501/CHIP-8_Emulator/blob/master/pics/TETRIS.png?raw=true)
+![](pics/TETRIS.png)
 
 RUSH_HOUR:
-![](https://github.com/veritas501/CHIP-8_Emulator/blob/master/pics/RUSH_HOUR.png?raw=true)
+![](pics/RUSH_HOUR.png)
