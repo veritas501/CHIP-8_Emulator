@@ -5,7 +5,7 @@
 #include <cstring>
 #include <SDL.h>
 
-#define VERSION "v1.0.0"
+#define VERSION "v1.0.1"
 
 using namespace std;
 using namespace CHIP8;
