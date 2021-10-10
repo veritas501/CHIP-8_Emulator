@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include <ctime>
 #include <fstream>
+#include <cstring>
 
 CHIP8::Chip8::Chip8() {
     // init random seed

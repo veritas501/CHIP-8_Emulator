@@ -2,6 +2,7 @@
 #include "hal.hpp"
 #include "utils.hpp"
 #include <iostream>
+#include <cstring>
 #include <SDL.h>
 
 #define VERSION "v1.0.0"
@@ -182,10 +183,13 @@ void CreateAudio() {
     SDL_PauseAudioDevice(audio_device, SDL_FALSE);
 }
 
-
-int main(int argc, char** argv) {
+#ifdef __cplusplus
+extern "C"
+#endif
+int main(int argc, char* argv[]) {
     if (SDL_Init(SDL_INIT_EVERYTHING)) {
         cerr << "Call SDL_Init failed" << endl;
+        cerr << SDL_GetError() << endl;
         exit(1);
     }
     CreateWindowAndRenderer();
